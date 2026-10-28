@@ -3,7 +3,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
+import { parseTwizyResponse } from './src/utils/assistantResponse';
+import { TwizyEvent, TwizyResponse } from './src/types';
 
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -15,7 +18,11 @@ const port = Number(process.env.PORT) || 3000;
 app.use(express.json({ limit: '25mb' }));
 
 // Initialize GoogleGenAI SDK
-const apiKey = process.env.GEMINI_API_KEY;
+const configuredApiKey = process.env.GEMINI_API_KEY;
+const apiKey =
+  configuredApiKey && !configuredApiKey.includes('paste-your-gemini-api-key-here')
+    ? configuredApiKey
+    : undefined;
 let ai: GoogleGenAI | null = null;
 if (apiKey) {
   ai = new GoogleGenAI({
@@ -126,7 +133,7 @@ const RESPONSE_SCHEMA = {
 };
 
 // Fallback logic when Gemini is offline or encounters an error
-function generateFallbackResponse(prompt: string, schedule: any[], currentDate: string) {
+function generateFallbackResponse(prompt: string, schedule: any[], currentDate: string): TwizyResponse {
   const p = prompt.toLowerCase();
   
   if (p.includes('ds class') || p.includes('moved to 3 pm') || p.includes('assignment submission')) {
@@ -143,7 +150,7 @@ function generateFallbackResponse(prompt: string, schedule: any[], currentDate: 
     const fridayStr = friday.toISOString().split('T')[0];
 
     const dsClass = schedule.find((e) => e.title?.toLowerCase().includes('data structure') || e.title?.toLowerCase().includes('ds'));
-    const updatedEvents = dsClass ? [{
+    const updatedEvents: TwizyEvent[] = dsClass ? [{
       ...dsClass,
       date: tomorrowStr,
       start_time: '15:00',
@@ -160,7 +167,7 @@ function generateFallbackResponse(prompt: string, schedule: any[], currentDate: 
       source: 'WhatsApp snippet',
     }];
 
-    const newAssignment = {
+    const newAssignment: TwizyEvent = {
       id: 'assign-' + Date.now(),
       title: 'Assignment Submission Deadline',
       date: fridayStr,
@@ -245,7 +252,8 @@ function generateFallbackResponse(prompt: string, schedule: any[], currentDate: 
 
 app.post('/api/chat', async (req: Request, res: Response) => {
   try {
-    const { prompt, schedule, preferences, currentDate, currentTime, timezone, imageBase64, imageMimeType, history } = req.body;
+    const { schedule, preferences, currentDate, currentTime, timezone, imageBase64, imageMimeType, history } = req.body;
+    const prompt = req.body.prompt || req.body.message;
 
     const contextHeader = `CURRENT CONTEXT:
 - Date: ${currentDate || new Date().toISOString().split('T')[0]}
@@ -258,7 +266,10 @@ app.post('/api/chat', async (req: Request, res: Response) => {
     if (!ai) {
       console.warn('GEMINI_API_KEY not configured, using fallback intelligent assistant');
       const fallback = generateFallbackResponse(prompt || '', schedule || [], currentDate || '2026-10-28');
-      return res.json(fallback);
+      return res.json({
+        ...fallback,
+        error: 'GEMINI_API_KEY is missing. Add it to .env.local and restart the server for live Gemini responses.',
+      });
     }
 
     const contents: any[] = [];
@@ -283,8 +294,9 @@ app.post('/api/chat', async (req: Request, res: Response) => {
       contents.push(fullUserText);
     }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+    const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+    const request = {
+      model: primaryModel,
       contents,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
@@ -292,22 +304,40 @@ app.post('/api/chat', async (req: Request, res: Response) => {
         responseSchema: RESPONSE_SCHEMA,
         temperature: 0.2,
       },
-    });
-
-    const responseText = response.text?.trim() || '{}';
-    let parsedData;
+    };
+    let response;
     try {
-      parsedData = JSON.parse(responseText);
-    } catch (parseErr) {
-      console.error('Failed to parse Gemini response JSON:', responseText);
-      parsedData = generateFallbackResponse(prompt || '', schedule || [], currentDate);
+      response = await ai.models.generateContent(request);
+    } catch (modelErr: any) {
+      if (primaryModel !== 'gemini-3.5-flash-lite') {
+        console.warn('Primary model failed, attempting fallback to gemini-3.5-flash-lite...', modelErr.message);
+        response = await ai.models.generateContent({
+          ...request,
+          model: 'gemini-3.5-flash-lite',
+        });
+      } else {
+        throw modelErr;
+      }
     }
 
-    return res.json(parsedData);
+    try {
+      return res.json(parseTwizyResponse(response.text || ''));
+    } catch {
+      response = await ai.models.generateContent({
+        ...request,
+        contents: [...contents, { text: 'Return valid JSON only. Do not use markdown fences.' }],
+      });
+      return res.json(parseTwizyResponse(response.text || ''));
+    }
   } catch (error: any) {
     console.error('Gemini API Error:', error);
     const fallback = generateFallbackResponse(req.body.prompt || '', req.body.schedule || [], req.body.currentDate || '2026-10-28');
-    return res.json(fallback);
+    return res.json({
+      ...fallback,
+      error: process.env.GEMINI_API_KEY
+        ? 'Gemini is unavailable right now. Showing a local demo response.'
+        : 'GEMINI_API_KEY is missing. Add it to .env.local and restart the server for live Gemini responses.',
+    });
   }
 });
 

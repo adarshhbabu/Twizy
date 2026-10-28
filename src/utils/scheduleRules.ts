@@ -7,10 +7,54 @@ export function timeToMinutes(timeStr: string): number {
 }
 
 export function minutesToTime(mins: number): string {
-  const normalized = Math.max(0, mins % 1440);
+  const normalized = ((mins % 1440) + 1440) % 1440;
   const h = Math.floor(normalized / 60);
   const m = normalized % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+export function getUpcomingMustAttendEvent(
+  events: TwizyEvent[],
+  date: string,
+  nowMinutes: number,
+  calledEventIds: ReadonlySet<string>,
+  windowMinutes = 20,
+  graceMinutes = 5
+): TwizyEvent | null {
+  return (
+    events.find((event) => {
+      if (!event.must_attend || event.date !== date || calledEventIds.has(event.id)) {
+        return false;
+      }
+      const difference = timeToMinutes(event.start_time) - nowMinutes;
+      return difference <= windowMinutes && difference >= -graceMinutes;
+    }) || null
+  );
+}
+
+export function applyScheduleChanges(
+  current: TwizyEvent[],
+  toAdd: TwizyEvent[],
+  toUpdate: TwizyEvent[],
+  toRemove: string[]
+): TwizyEvent[] {
+  const protectedIds = new Set(
+    current.filter((event) => event.type === 'graded').map((event) => event.id)
+  );
+  const updatedById = new Map(toUpdate.map((event) => [event.id, event]));
+  const updated = current
+    .filter((event) => !toRemove.includes(event.id) || protectedIds.has(event.id))
+    .map((event) => {
+      const proposal = updatedById.get(event.id);
+      if (!proposal || protectedIds.has(event.id)) return event;
+      return event.type === 'class' &&
+        !/whatsapp|notice|instructor/i.test(proposal.source)
+        ? event
+        : { ...event, ...proposal, id: event.id };
+    });
+
+  const existingIds = new Set(updated.map((event) => event.id));
+  return [...updated, ...toAdd.filter((event) => !existingIds.has(event.id))];
 }
 
 export interface ConflictResult {

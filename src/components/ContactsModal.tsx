@@ -45,7 +45,7 @@ export const ContactsModal: React.FC<ContactsModalProps> = ({
     const created: Contact = {
       id: 'c-' + Date.now(),
       name: newContact.name || 'Contact',
-      phone: newContact.phone || '+919900000000',
+      phone: newContact.phone || '919900000000',
       email: newContact.email || 'contact@example.com',
       relationship: newContact.relationship || 'Peer',
       defaultTone: (newContact.defaultTone as Tone) || 'casual',

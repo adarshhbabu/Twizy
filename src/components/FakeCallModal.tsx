@@ -13,6 +13,7 @@ export const FakeCallModal: React.FC<FakeCallModalProps> = ({ event, isOpen, onC
   const [callState, setCallState] = useState<'ringing' | 'connected' | 'ended'>('ringing');
   const [callDuration, setCallDuration] = useState(0);
   const [transcript, setTranscript] = useState('');
+  const [audioReady, setAudioReady] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !event) {
@@ -21,10 +22,12 @@ export const FakeCallModal: React.FC<FakeCallModalProps> = ({ event, isOpen, onC
       setCallState('ringing');
       setCallDuration(0);
       setTranscript('');
+      setAudioReady(false);
       return;
     }
 
     setCallState('ringing');
+    setAudioReady(false);
     startRingtone();
 
     return () => {
@@ -60,6 +63,11 @@ export const FakeCallModal: React.FC<FakeCallModalProps> = ({ event, isOpen, onC
     speakText(spokenMessage, () => {
       // call can linger for user to hang up
     });
+  };
+
+  const handleStartAudio = () => {
+    startRingtone();
+    setAudioReady(true);
   };
 
   const handleDecline = () => {
@@ -121,6 +129,15 @@ export const FakeCallModal: React.FC<FakeCallModalProps> = ({ event, isOpen, onC
             <div className="text-xs text-neutral-400 mt-4 italic">
               "Your calendar remembers. Your buddy reacts."
             </div>
+
+            {!audioReady && (
+              <button
+                onClick={handleStartAudio}
+                className="mt-4 px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-xs text-neutral-200 cursor-pointer"
+              >
+                Tap to start ringtone
+              </button>
+            )}
 
             {/* Action buttons */}
             <div className="flex items-center justify-between w-full mt-10 px-4">

@@ -19,7 +19,7 @@ import {
   INITIAL_CONTACTS,
   INITIAL_PREFERENCES,
 } from './utils/demoData';
-import { timeToMinutes } from './utils/scheduleRules';
+import { applyScheduleChanges, getUpcomingMustAttendEvent, timeToMinutes } from './utils/scheduleRules';
 import { TopNav } from './components/TopNav';
 import { ChatArea } from './components/ChatArea';
 import { TimelinePanel } from './components/TimelinePanel';
@@ -118,16 +118,12 @@ export default function App() {
       const nowMins = timeToMinutes(nowTimeStr);
       const todayStr = getIndiaTodayString();
 
-      const candidate = schedule.find((ev) => {
-        if (!ev.must_attend) return false;
-        if (ev.date !== todayStr) return false;
-        if (calledEventIdsRef.current.has(ev.id)) return false;
-
-        const evStartMins = timeToMinutes(ev.start_time);
-        const diff = evStartMins - nowMins;
-        // Trigger if starts within 20 mins (and hasn't already passed more than 5 mins ago)
-        return diff <= 20 && diff >= -5;
-      });
+      const candidate = getUpcomingMustAttendEvent(
+        schedule,
+        todayStr,
+        nowMins,
+        calledEventIdsRef.current
+      );
 
       if (candidate) {
         calledEventIdsRef.current.add(candidate.id);
@@ -211,6 +207,7 @@ export default function App() {
       const data: TwizyResponse = await response.json();
 
       const twizyMsgId = 'tz-' + Date.now();
+      const responseText = data.error ? `${data.reply}\n\nError: ${data.error}` : data.reply;
       const hasPendingChanges =
         (data.events_to_add && data.events_to_add.length > 0) ||
         (data.events_to_update && data.events_to_update.length > 0) ||
@@ -238,7 +235,7 @@ export default function App() {
           {
             id: twizyMsgId,
             sender: 'twizy',
-            text: data.reply,
+            text: responseText,
             timestamp: getIndiaTimeString(),
             pendingConfirmation: {
               eventsToAdd: data.events_to_add || [],
@@ -269,7 +266,7 @@ export default function App() {
           {
             id: twizyMsgId,
             sender: 'twizy',
-            text: data.reply,
+            text: responseText,
             timestamp: getIndiaTimeString(),
             draftMessage: data.draft_message || undefined,
             askUser: data.ask_user || undefined,
@@ -305,20 +302,7 @@ export default function App() {
     toUpdate: TwizyEvent[],
     toRemove: string[]
   ) => {
-    setSchedule((prev) => {
-      // 1. Remove
-      let updated = prev.filter((e) => !toRemove.includes(e.id));
-      // 2. Update
-      if (toUpdate.length > 0) {
-        const updateMap = new Map(toUpdate.map((u) => [u.id, u]));
-        updated = updated.map((item) => updateMap.get(item.id) || item);
-      }
-      // 3. Add
-      if (toAdd.length > 0) {
-        updated = [...updated, ...toAdd];
-      }
-      return updated;
-    });
+    setSchedule((prev) => applyScheduleChanges(prev, toAdd, toUpdate, toRemove));
   };
 
   const handleApplyPendingChanges = (

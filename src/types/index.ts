@@ -51,6 +51,7 @@ export interface TwizyResponse {
   draft_message: DraftMessage | null;
   ask_user: string | null;
   preferences_update: Partial<StudentPreferences> | null;
+  error?: string;
 }
 
 export interface ChatMessage {

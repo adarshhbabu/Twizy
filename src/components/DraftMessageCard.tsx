@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Contact, DraftMessage, MessageChannel, Tone } from '../types';
 import { Send, MessageSquare, Mail, Smartphone, Edit2, Check, RefreshCw } from 'lucide-react';
+import { buildMessageLink } from '../utils/messageLinks';
 
 interface DraftMessageCardProps {
   initialDraft: DraftMessage;
@@ -47,28 +48,12 @@ export const DraftMessageCard: React.FC<DraftMessageCardProps> = ({
     }
   };
 
-  const getCleanNumber = (phoneStr: string) => {
-    return phoneStr.replace(/[^0-9]/g, '');
-  };
-
   const handleSend = () => {
-    const phone = matchedContact?.phone || '+919876543210';
-    const cleanPhone = getCleanNumber(phone);
-    const email = matchedContact?.email || 'student@university.edu';
-
-    let url = '';
-    if (channel === 'whatsapp') {
-      url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(body)}`;
-    } else if (channel === 'sms') {
-      url = `sms:${cleanPhone}?body=${encodeURIComponent(body)}`;
-    } else if (channel === 'email') {
-      const emailSubject = subject || 'Notice of Delay';
-      url = `mailto:${email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
-    }
-
-    if (url) {
-      window.open(url, '_blank');
-    }
+    const url = buildMessageLink(
+      { recipient_name: recipient, channel, tone, subject, body },
+      matchedContact
+    );
+    window.open(url, '_blank');
   };
 
   const handleCopy = () => {
