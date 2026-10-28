@@ -350,7 +350,7 @@ export default function App() {
   const todayEventsCount = schedule.filter((e) => e.date === currentDate).length;
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${
+    <div className={`h-screen w-screen flex flex-col font-sans transition-colors duration-200 overflow-hidden ${
       darkMode ? 'bg-neutral-950 text-neutral-100' : 'bg-neutral-100 text-neutral-900'
     }`}>
       {/* Top Bar */}
@@ -366,11 +366,11 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex-1 min-h-0 flex overflow-hidden relative">
         {/* Chat Area (Left/Center) */}
         <section
-          className={`flex-1 h-[calc(100vh-61px)] ${
-            activeTab === 'chat' ? 'flex' : 'hidden md:flex'
+          className={`flex-1 h-full min-h-0 ${
+            activeTab === 'chat' ? 'flex flex-col' : 'hidden md:flex md:flex-col'
           }`}
         >
           <ChatArea
@@ -388,8 +388,8 @@ export default function App() {
 
         {/* Right Panel: Today Timeline & What Changed Log */}
         <section
-          className={`w-full md:w-[420px] lg:w-[480px] h-[calc(100vh-61px)] shrink-0 ${
-            activeTab === 'timeline' ? 'flex' : 'hidden md:flex'
+          className={`w-full md:w-[420px] lg:w-[480px] h-full min-h-0 shrink-0 ${
+            activeTab === 'timeline' ? 'flex flex-col' : 'hidden md:flex md:flex-col'
           }`}
         >
           <TimelinePanel
